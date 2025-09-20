@@ -1,24 +1,26 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pymongo.errors import PyMongoError
 from bson import ObjectId
 from bson.errors import InvalidId
 from datetime import datetime
 
-from app.db.mongo import plants_collection
-from app.models.plant import Plant, GrowthEntry
+from app.db.mongo import plants_collection, users_collection
+from app.models.plant import Plant, GrowthEntry, PlantCreate
+from app.auth.oauth2 import get_current_user
 
 router = APIRouter()
 
 
 ################################### GET ###################################
 
+#DONE
 # GET /plants → список всех растений
 @router.get("/")
-async def get_plants_list(user_id: str = Query(...)):
+async def get_plants_list(current_user=Depends(get_current_user)):
     try:
         pipeline = [
             { 
-                "$match": { "user_id": user_id }  
+                "$match": { "user_id": current_user.id }  
             },
             {
                 "$lookup": {
@@ -58,16 +60,19 @@ async def get_plants_list(user_id: str = Query(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-
-# GET /plants/{id} → одно растение
+#DONE
+# GET /plants/{id} → одно растение пользователя
 @router.get("/{id}")
-async def get_single_user_plant(id: str):
+async def get_single_user_plant(id: str, current_user=Depends(get_current_user)):
     try:
         object_id = ObjectId(id)
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    plant = plants_collection.find_one({"_id": object_id})
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    plant = plants_collection.find_one({"_id": id})
     if not plant:
         raise HTTPException(status_code=404, detail="Plant not found")
 
@@ -75,43 +80,19 @@ async def get_single_user_plant(id: str):
     return {"plant": plant}
 
 
-# фильты и поиск по имени и виду
-@router.get("/search")
-async def filter_plants(type: str = Query(..., regex="^(name|species)$"), value: str = Query(..., min_length=1)):
-    try:
-        if type == "name":
-            plants = list(plants_collection.find({"name": {"$regex": value}}))
-            for plant in plants:
-                plant["_id"] = str(plant["_id"])
-            return {
-                "message": f"{len(plants)} plants with this name was found.",
-                "plants": plants}
-        
-        elif type == "species":
-            plants = list(plants_collection.find({"species": {"$regex": value}}))
-            for plant in plants:
-                plant["_id"] = str(plant["_id"])
-            return {
-                "message": f"{len(plants)} plants with this species was found.",
-                "plants": plants}
-
-        else:
-            raise HTTPException(status_code=400, detail="Invalid filter type.")
-    except PyMongoError as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-
-
-# GET /plants/{id}/growth → история роста
+#DONE
+# GET /plants/{id}/growth → история роста пользователя
 @router.get("/{id}/growth")
-async def get_growth_entry(id: str):
+async def get_growth_entry(id: str, current_user=Depends(get_current_user)):
     try:
         object_id = ObjectId(id)
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    plant = plants_collection.find_one({"_id": object_id}, {"growth_log": 1})
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    plant = plants_collection.find_one({"_id": id}, {"growth_log": 1})
     if not plant:
         raise HTTPException(status_code=404, detail="Plant not found")
 
@@ -120,9 +101,10 @@ async def get_growth_entry(id: str):
 
 ################################### POST ##################################
 
-# POST /plants/{id}/growth → добавить запись роста
+#DONE
+# POST /plants/{id}/growth → добавить запись роста пользователя
 @router.post("/{id}/growth")
-async def add_growth_entry(id: str, growth_entry: GrowthEntry):
+async def add_growth_entry(id: str, growth_entry: GrowthEntry, current_user=Depends(get_current_user)):
     try:
         object_id = ObjectId(id)
     except InvalidId:
@@ -131,8 +113,11 @@ async def add_growth_entry(id: str, growth_entry: GrowthEntry):
     entry_data = growth_entry.dict()
     entry_data["date"] = entry_data.get("date") or datetime.utcnow().isoformat()
 
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
     result = plants_collection.update_one(
-        {"_id": object_id},
+        {"_id": id},
         {"$push": {"growth_log": entry_data}}
     )
     if result.matched_count == 0:
@@ -140,13 +125,13 @@ async def add_growth_entry(id: str, growth_entry: GrowthEntry):
 
     return {"message": "Growth entry added successfully", "entry": entry_data}
 
-
+#DONE
 # POST /plants/{id}/water - обновление water -> now
 @router.post("/{id}/water")
-async def update_watering_date(id):
+async def update_watering_date(id, current_user=Depends(get_current_user)):
     try:
         now = datetime.utcnow()
-        object_id = ObjectId(id)
+
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
@@ -155,19 +140,23 @@ async def update_watering_date(id):
     if not update_data:
         raise HTTPException(status_code=400, detail="No data provided for update")
 
-    result = plants_collection.update_one({"_id": object_id}, {"$set": update_data})
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    result = plants_collection.update_one({"_id": id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Plant not found")
 
     return {"message": "Watering date updated successfully"}
 
 
+#DONE
 # POST /plants/{id}/fertilize - обновление fertilize -> now
 @router.post("/{id}/fertilize")
-async def update_fertilizing_date(id):
+async def update_fertilizing_date(id, current_user=Depends(get_current_user)):
     try:
         now = datetime.utcnow()
-        object_id = ObjectId(id)
+
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
@@ -176,36 +165,45 @@ async def update_fertilizing_date(id):
     if not update_data:
         raise HTTPException(status_code=400, detail="No data provided for update")
 
-    result = plants_collection.update_one({"_id": object_id}, {"$set": update_data})
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    result = plants_collection.update_one({"_id": id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Plant not found")
 
     return {"message": "Fertilizing date updated successfully"}
 
 
-# POST /plants → добавить растение
+#DONE
+# POST /plants → добавить растение для пользователя 
 @router.post("/")
-async def add_user_plant(plant: Plant):
+async def add_user_plant(plant_in: PlantCreate, current_user=Depends(get_current_user)):
     try:
-        doc = plant.dict()
+        doc = plant_in.dict()
+
+        doc["_id"] = str(ObjectId())
+        doc["user_id"] = current_user.id
+
         plants_collection.insert_one(doc)
-        doc["_id"] = str(doc.get("_id", ""))
+        
     except PyMongoError as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid data: {str(e)}")
 
-    return {"message": "Plant added successfully", "plant": doc}
-
+    return {"message": f"Plant for user {current_user.id} added successfully", "plant": doc}
 
 
 ################################### PUT ###################################
 
-# PUT /plants/{id} → обновить растение
+#DONE
+# PUT /plants/{id} → обновить растение принадлежащее пользователю
 @router.put("/{id}")
-async def update_plant(id: str, plant: Plant):
+async def update_plant(id: str, plant: PlantCreate, current_user=Depends(get_current_user)):
     try:
         object_id = ObjectId(id)
+
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
@@ -213,7 +211,10 @@ async def update_plant(id: str, plant: Plant):
     if not update_data:
         raise HTTPException(status_code=400, detail="No data provided for update")
 
-    result = plants_collection.update_one({"_id": object_id}, {"$set": update_data})
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    result = plants_collection.update_one({"_id": id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Plant not found")
 
@@ -222,15 +223,19 @@ async def update_plant(id: str, plant: Plant):
 
 ################################# DELETE ##################################
 
-# DELETE /plants/{id} → удалить растение
+#DONE
+# DELETE /plants/{id} → удалить растение принадлежащее пользователю
 @router.delete("/{id}")
-async def delete_user_plant(id: str):
+async def delete_user_plant(id: str, current_user=Depends(get_current_user)):
     try:
         object_id = ObjectId(id)
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    result = plants_collection.delete_one({"_id": object_id})
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    result = plants_collection.delete_one({"_id": id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Plant not found")
 

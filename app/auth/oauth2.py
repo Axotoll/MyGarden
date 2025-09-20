@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from app.db.mongo import users_collection
 from app.models.user import UserInDb, TokenData
-import os
 from app.config import JWT_SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 # Эта штука говорит Swagger, что мы используем Bearer токен
@@ -19,10 +18,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
-    print("JWT_SECRET_KEY:", JWT_SECRET_KEY)
-    print("ALGORITHM:", ALGORITHM)
-    print("ACCESS_TOKEN_EXPIRE_MINUTES:", ACCESS_TOKEN_EXPIRE_MINUTES)
-
+    
     return encoded_jwt
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDb:
@@ -32,7 +28,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDb:
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, "your_secret_key", algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -42,4 +38,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDb:
     user_dict = users_collection.find_one({"email": token_data.email})
     if user_dict is None:
         raise credentials_exception
+    
+    #we need id of the user as str
+    user_dict["id"] = str(user_dict["_id"])
     return UserInDb(**user_dict)

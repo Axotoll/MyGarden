@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
 
 
 class UserInDb(BaseModel):
+    id: str | None = None  # MongoDB ObjectId as string
     username: str
     email: EmailStr
     hashed_password: str # bcrypt/argon2 hash

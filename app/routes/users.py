@@ -3,11 +3,12 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pymongo.errors import PyMongoError
 
-from app.models.user import UserCreate, UserInDb, UserPublic, UserLogin, Token, TokenData
+from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, JWT_SECRET_KEY
+from app.models.user import UserCreate, UserInDb, UserPublic, UserLogin, Token
 from app.functions.security import hash_password, verify_password
 from app.db.mongo import users_collection
-
 from app.auth.oauth2 import create_access_token, get_current_user
+
 
 router = APIRouter()
 
@@ -33,6 +34,7 @@ async def register_user(user: UserCreate):
         result = users_collection.insert_one(user_in_db.dict())
         if not result.acknowledged:
             raise HTTPException(status_code=500, detail="Failed to create user.")
+
 
         return UserPublic(
             username=user_in_db.username,

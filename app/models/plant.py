@@ -11,7 +11,15 @@ class GrowthEntry(BaseModel):
 
 
 class Plant(BaseModel):
+    species_id: Optional[str] = None
+    date_planted: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    last_watered: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    last_fertilized: Optional[datetime] = None
+    growth_log: List[GrowthEntry] = []
+    care_tips: Optional[str] = None
     user_id: str
+
+class PlantCreate(BaseModel):
     species_id: Optional[str] = None
     date_planted: Optional[datetime] = Field(default_factory=datetime.utcnow)
     last_watered: Optional[datetime] = Field(default_factory=datetime.utcnow)
