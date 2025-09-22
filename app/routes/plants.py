@@ -69,14 +69,45 @@ async def get_single_user_plant(id: str, current_user=Depends(get_current_user))
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+    if not plants_collection.find_one({"_id": object_id, "user_id": current_user.id}):
         raise HTTPException(status_code=403, detail="Forbidden")
-    
-    plant = plants_collection.find_one({"_id": id})
+    pipeline = [
+            { 
+                "$match": { "_id": object_id }  
+            },
+            {
+                "$lookup": {
+                    "from": "species",
+                    "let": { "speciesIdStr": "$species_id" },
+                    "pipeline": [
+                        {
+                            "$match": {
+                                "$expr": {
+                                    "$eq": [
+                                        "$_id",
+                                        { "$convert": { "input": "$$speciesIdStr", "to": "objectId", "onError": None, "onNull": None } }
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    "as": "species_info"
+                }
+            }
+        ]
+    plants = list(plants_collection.aggregate(pipeline))
+    # plant = plants_collection.find_one({"_id": object_id})
+    for plant in plants:
+            plant["_id"] = str(plant["_id"])
+            #need to convert "_id" from species_info as well
+            if "species_info" in plant and plant["species_info"]:
+                for species in plant["species_info"]:
+                    species["_id"] = str(species["_id"])
+
     if not plant:
         raise HTTPException(status_code=404, detail="Plant not found")
 
-    plant["_id"] = str(plant["_id"])
+    # plant["_id"] = str(plant["_id"])
     return {"plant": plant}
 
 

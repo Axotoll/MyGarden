@@ -6,6 +6,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.116.1",
+    "fastapi-admin>=1.0.4",
+    "mongoengine>=0.29.1",
+    "nicegui>=2.24.1",
     "pyjwt>=2.10.1",
     "pymongo>=4.15.0",
+    "redis>=6.4.0",
+    "requests>=2.32.5",
 ]

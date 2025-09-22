@@ -1,7 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-
-
+        
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
