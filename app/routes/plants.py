@@ -4,6 +4,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from datetime import datetime
 
+
 from app.db.mongo import plants_collection, users_collection
 from app.models.plant import Plant, GrowthEntry, PlantCreate
 from app.auth.oauth2 import get_current_user
@@ -52,6 +53,9 @@ async def get_plants_list(current_user=Depends(get_current_user)):
             if "species_info" in plant and plant["species_info"]:
                 for species in plant["species_info"]:
                     species["_id"] = str(species["_id"])
+            if "growth_log" in plant and plant["growth_log"]:
+                for entry in plant["growth_log"]:
+                    entry["_id_growth"] = str(entry["_id_growth"])
 
         return {"plants": plants}
 
@@ -69,11 +73,11 @@ async def get_single_user_plant(id: str, current_user=Depends(get_current_user))
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    if not plants_collection.find_one({"_id": object_id, "user_id": current_user.id}):
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
         raise HTTPException(status_code=403, detail="Forbidden")
     pipeline = [
             { 
-                "$match": { "_id": object_id }  
+                "$match": { "_id": id }  
             },
             {
                 "$lookup": {
@@ -103,6 +107,9 @@ async def get_single_user_plant(id: str, current_user=Depends(get_current_user))
             if "species_info" in plant and plant["species_info"]:
                 for species in plant["species_info"]:
                     species["_id"] = str(species["_id"])
+            if "growth_log" in plant and plant["growth_log"]:
+                for entry in plant["growth_log"]:
+                    entry["_id_growth"] = str(entry["_id_growth"])
 
     if not plant:
         raise HTTPException(status_code=404, detail="Plant not found")
@@ -143,6 +150,7 @@ async def add_growth_entry(id: str, growth_entry: GrowthEntry, current_user=Depe
 
     entry_data = growth_entry.dict()
     entry_data["date"] = entry_data.get("date") or datetime.utcnow().isoformat()
+    entry_data["_id_growth"] = str(ObjectId())
 
     if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -253,6 +261,26 @@ async def update_plant(id: str, plant: PlantCreate, current_user=Depends(get_cur
 
 
 ################################# DELETE ##################################
+
+@router.delete("/{id}/growth/{id_growth}")
+async def delete_growth_entry(id: str, id_growth: str, current_user=Depends(get_current_user)):
+    try:
+        object_id = ObjectId(id)
+        object_id_growth = ObjectId(id_growth)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    if not plants_collection.find_one({"_id": id, "user_id": current_user.id}):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    result = plants_collection.update_one(
+        {"_id": id},
+        {"$pull": {"growth_log": {"_id_growth": id_growth}}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Plant not found")
+
+    return {"message": "Growth entry deleted successfully"}
 
 #DONE
 # DELETE /plants/{id} → удалить растение принадлежащее пользователю

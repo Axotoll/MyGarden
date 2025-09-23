@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import Field
 
 class GrowthEntry(BaseModel):
+    _id_growth: Optional[str] = None
     date: Optional[datetime] = Field(default_factory=datetime.utcnow)
     height: Optional[float]
     photo_url: Optional[str]

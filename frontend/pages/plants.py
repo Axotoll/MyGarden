@@ -64,26 +64,5 @@ def show_plants():
                             ui.label("Last fertilized:").classes("font-semibold text-gray-700 mr-2")
                             ui.label(last_fertilized).classes("text-sm text-gray-600")
 
-                # with ui.card().classes('p-4 bg-green-50 shadow-md'):
-                #     ui.label(name).classes("text-lg font-bold")
-                #     ui.label(scientific_name).classes("italic text-sm text-gray-600")
-                #     ui.label(f"Family: {family}").classes("text-sm text-gray-500 mt-1")
-                    
-                #     with ui.card_section().classes("mt-4"):
-                #         ui.label(f"Planted: {date_planted}")
-                #         ui.label(f"Last watered: {last_watered}")
-                #         ui.label(f"Last fertilized: {last_fertilized}")
-                    
-                    #no need here, only in plant page
-                    # if care_tips:
-                    #     ui.label(f"Tips: {care_tips}").classes("mt-2 text-sm text-gray-700")
-                    
-                    #no need here, only in plant page
-                    # if growth_log:
-                    #     ui.label("Growth Log:").classes("mt-2 font-semibold")
-                    #     for g in growth_log:
-                    #         ui.label(f"{g['date'][:10]} — {g['height']}cm").classes("text-sm text-gray-600")
-
-
     else:
         ui.notify("Ошибка при загрузке растений", color="negative")
